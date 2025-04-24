@@ -1,42 +1,46 @@
-from flask import Flask, request, jsonify
-import requests
 import json
-import os
+import requests
+import pandas as pd
 
-app = Flask(__name__)
+with open("service_info.json", "r") as f:
+    service_info = json.load(f)
 
-# Configuración del servicio de Azure ML
-SCORING_URI = os.environ.get('SCORING_URI', 'URL_DE_TU_SERVICIO_ACI')
-API_KEY = os.environ.get('API_KEY', 'TU_CLAVE_API')
+scoring_uri = service_info["scoring_uri"]
+primary_key = service_info["primary_key"]
 
-@app.route('/predict', methods=['POST'])
-def predict():
-    try:
-        # Obtener datos de la solicitud
-        request_data = request.get_json()
-        
-        # Preparar encabezados para la solicitud a Azure ML
-        headers = {
-            'Content-Type': 'application/json',
-            'Authorization': f'Bearer {API_KEY}'
-        }
-        
-        # Llamar al servicio de Azure ML
-        response = requests.post(
-            SCORING_URI, 
-            data=json.dumps(request_data), 
-            headers=headers
-        )
-        
-        # Devolver la respuesta
-        return jsonify(json.loads(response.text))
-    
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
+cliente_ejemplo = {
+    "data": {
+        "CustomerID": [1001],
+        "NameStyle": [False],
+        "Title": ["Sr."],
+        "FirstName": ["Carlos"],
+        "MiddleName": [None],
+        "LastName": ["Gómez"],
+        "Suffix": [None],
+        "CompanyName": ["Empresa Nueva"],
+        "SalesPerson": ["adventure-works\\david8"],
+        "EmailAddress": ["carlos@ejemplo.com"],
+        "Phone": ["555-123-4567"]
+    }
+}
 
-@app.route('/health', methods=['GET'])
-def health():
-    return jsonify({'status': 'API funcionando correctamente'})
+headers = {
+    "Content-Type": "application/json",
+    "Authorization": f"Bearer {primary_key}"
+}
 
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=8800, debug=True)
+print("Enviando solicitud al servicio...")
+response = requests.post(
+    scoring_uri, 
+    data=json.dumps(cliente_ejemplo),
+    headers=headers
+)
+
+print("\nRespuesta del servicio:")
+print(f"Código de estado: {response.status_code}")
+if response.status_code == 200:
+    result = response.json()
+    print(f"Fecha predicha: {result.get('predicted_date', 'No disponible')}")
+    print(f"Respuesta completa: {result}")
+else:
+    print(f"Error: {response.text}")

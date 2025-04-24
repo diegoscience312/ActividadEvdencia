@@ -1,77 +1,32 @@
+# Guardar como score.py en el directorio simple_model
 import json
-import numpy as np
-import pandas as pd
 import pickle
-from datetime import datetime
+import numpy as np
+import os
 from azureml.core.model import Model
-from inference_schema.schema_decorators import input_schema, output_schema
-from inference_schema.parameter_types.numpy_parameter_type import NumpyParameterType
-from inference_schema.parameter_types.pandas_parameter_type import PandasParameterType
 
 def init():
-    global modelo, encoder, scaler, columnas_categoricas, columnas_numericas, fecha_referencia
+    global modelo
+    print("Iniciando init()")
     
-    model_path = Model.get_model_path('model')
+    # Cargar el modelo simple
+    model_path = Model.get_model_path('modelo_actualizado')
     modelo = pickle.load(open(model_path, 'rb'))
-    
-    encoder = pickle.load(open('./encoder.pkl', 'rb'))
-    scaler = pickle.load(open('./scaler.pkl', 'rb'))
-    columnas_categoricas = pickle.load(open('./columnas_categoricas.pkl', 'rb'))
-    columnas_numericas = pickle.load(open('./columnas_numericas.pkl', 'rb'))
-    
-    fecha_referencia = datetime(2000, 1, 1)
+    print("Modelo cargado correctamente")
 
-input_sample = pd.DataFrame({
-    'CustomerID': [1001],
-    'NameStyle': [False],
-    'Title': ['Sr.'],
-    'FirstName': ['Carlos'],
-    'MiddleName': [None],
-    'LastName': ['Gómez'],
-    'Suffix': [None],
-    'CompanyName': ['Empresa Nueva'],
-    'SalesPerson': ['adventure-works\\david8'],
-    'EmailAddress': ['carlos@ejemplo.com'],
-    'Phone': ['555-123-4567']
-})
-
-output_sample = {"predicted_date": "2006-09-09"}
-
-@input_schema('data', PandasParameterType(input_sample))
-@output_schema(NumpyParameterType(output_sample))
 def run(data):
     try:
-        cliente = data.copy()
+        print("Procesando solicitud")
+        # Parsear los datos JSON
+        data_dict = json.loads(data)
+        input_data = np.array(data_dict['data'])
         
-        if columnas_categoricas:
-            for col in columnas_categoricas:
-                if col in cliente.columns:
-                    cliente[col] = cliente[col].fillna('Desconocido')
-            
-            nuevo_encoded = encoder.transform(cliente[columnas_categoricas])
-            if hasattr(nuevo_encoded, 'toarray'):
-                nuevo_encoded = nuevo_encoded.toarray()
-                
-            nuevo_encoded_df = pd.DataFrame(
-                nuevo_encoded,
-                columns=encoder.get_feature_names_out(columnas_categoricas)
-            )
-            
-            cliente = cliente.drop(columnas_categoricas, axis=1)
-            cliente = pd.concat([cliente, nuevo_encoded_df], axis=1)
+        # Hacer la predicción
+        result = modelo.predict(input_data).tolist()
         
-        for col in columnas_numericas:
-            if col in cliente.columns:
-                cliente[col] = cliente[col].fillna(cliente[col].mean())
+        # Devolver el resultado
+        return {"result": result}
         
-        if columnas_numericas:
-            cliente[columnas_numericas] = scaler.transform(cliente[columnas_numericas])
-    
-        dias_predichos = modelo.predict(cliente)[0]
-        fecha_predicha = fecha_referencia + pd.Timedelta(days=int(dias_predichos))
-        
-        result = {"predicted_date": fecha_predicha.strftime('%Y-%m-%d')}
-        return result
     except Exception as e:
         error = str(e)
         return {"error": error}
